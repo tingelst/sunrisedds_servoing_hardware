@@ -1,0 +1,9 @@
+<library path="sunrisedds_servoing_hardware">
+
+  <class name="sunrisedds_servoing_hardware" type="sunrisedds_servoing_hardware::SunriseDdsServoingHardware" base_class_type="hardware_interface::SystemInterface">
+    <description>
+        SunriseDDS SmartServo hardware interface
+    </description>
+  </class>
+
+</library>
