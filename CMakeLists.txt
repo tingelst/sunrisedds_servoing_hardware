@@ -17,7 +17,13 @@ find_package(rclcpp REQUIRED)
 find_package(angles REQUIRED)
 find_package(CycloneDDS REQUIRED)
 
-add_library(sunrisedds_servoing_hardware SHARED src/sunrisedds_servoing_hardware.cpp)
+add_library(sunrisedds_servoing_hardware SHARED 
+  src/sunrisedds_servoing_hardware.cpp 
+  src/Header.c
+  src/JointPosition.c
+  src/JointQuantity.c
+  src/Time.c
+  ) 
 target_include_directories(sunrisedds_servoing_hardware PUBLIC include)
 target_link_libraries(sunrisedds_servoing_hardware CycloneDDS::ddsc)
 ament_target_dependencies(sunrisedds_servoing_hardware
