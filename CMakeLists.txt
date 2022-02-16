@@ -17,6 +17,16 @@ find_package(rclcpp REQUIRED)
 find_package(angles REQUIRED)
 find_package(CycloneDDS REQUIRED)
 
+add_executable(sunrisedds_servoing_hardware_sim
+  src/sunrisedds_servoing_hardware_sim.cpp 
+  src/Header.c
+  src/JointPosition.c
+  src/JointQuantity.c
+  src/Time.c
+  ) 
+target_include_directories(sunrisedds_servoing_hardware_sim PUBLIC include)
+target_link_libraries(sunrisedds_servoing_hardware_sim CycloneDDS::ddsc)
+
 add_library(sunrisedds_servoing_hardware SHARED 
   src/sunrisedds_servoing_hardware.cpp 
   src/Header.c
@@ -39,6 +49,11 @@ target_compile_definitions(sunrisedds_servoing_hardware PRIVATE
 install(DIRECTORY include/ DESTINATION include)
 
 install(TARGETS sunrisedds_servoing_hardware
+        ARCHIVE DESTINATION lib
+        LIBRARY DESTINATION lib
+        RUNTIME DESTINATION bin)
+
+install(TARGETS sunrisedds_servoing_hardware_sim
         ARCHIVE DESTINATION lib
         LIBRARY DESTINATION lib
         RUNTIME DESTINATION bin)

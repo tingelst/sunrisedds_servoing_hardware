@@ -38,6 +38,9 @@ using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface
 
 namespace sunrisedds_servoing_hardware
 {
+
+static constexpr int MAX_SAMPLES = 1;
+
 class SunriseDdsServoingHardware : public hardware_interface::SystemInterface
 {
 public:
@@ -78,6 +81,11 @@ private:
   dds_entity_t state_topic_;
   dds_entity_t writer_;
   dds_entity_t reader_;
+  dds_entity_t read_condition_;
+  dds_entity_t waitset_;
+
+  void* samples_[MAX_SAMPLES];
+  dds_sample_info_t infos_[MAX_SAMPLES];
 
 };
 

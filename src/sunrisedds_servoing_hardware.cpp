@@ -84,7 +84,7 @@ CallbackReturn SunriseDdsServoingHardware::on_init(const hardware_interface::Har
   if (command_topic_ < 0)
   {
     RCLCPP_FATAL(rclcpp::get_logger("SunriseDdsServoingHardware"), "dds_create_topic: %s",
-                 dds_strretcode(-participant_));
+                 dds_strretcode(-command_topic_));
     return CallbackReturn::ERROR;
   }
 
@@ -93,25 +93,47 @@ CallbackReturn SunriseDdsServoingHardware::on_init(const hardware_interface::Har
   if (state_topic_ < 0)
   {
     RCLCPP_FATAL(rclcpp::get_logger("SunriseDdsServoingHardware"), "dds_create_topic: %s",
-                 dds_strretcode(-participant_));
+                 dds_strretcode(-state_topic_));
     return CallbackReturn::ERROR;
   }
 
   writer_ = dds_create_writer(participant_, command_topic_, nullptr, nullptr);
   if (writer_ < 0)
   {
-    RCLCPP_FATAL(rclcpp::get_logger("SunriseDdsServoingHardware"), "dds_create_writer: %s",
-                 dds_strretcode(-participant_));
+    RCLCPP_FATAL(rclcpp::get_logger("SunriseDdsServoingHardware"), "dds_create_writer: %s", dds_strretcode(-writer_));
     return CallbackReturn::ERROR;
   }
 
-  reader_ = dds_create_reader(participant_, command_topic_, nullptr, nullptr);
+  reader_ = dds_create_reader(participant_, state_topic_, nullptr, nullptr);
   if (reader_ < 0)
   {
-    RCLCPP_FATAL(rclcpp::get_logger("SunriseDdsServoingHardware"), "dds_create_reader: %s",
-                 dds_strretcode(-participant_));
+    RCLCPP_FATAL(rclcpp::get_logger("SunriseDdsServoingHardware"), "dds_create_reader: %s", dds_strretcode(-reader_));
     return CallbackReturn::ERROR;
   }
+
+  read_condition_ = dds_create_readcondition(reader_, DDS_ANY_STATE);
+  if (read_condition_ < 0)
+  {
+    RCLCPP_FATAL(rclcpp::get_logger("SunriseDdsServoingHardware"), "dds_create_readcondition: %s",
+                 dds_strretcode(-read_condition_));
+    return CallbackReturn::ERROR;
+  }
+
+  waitset_ = dds_create_waitset(participant_);
+  if (read_condition_ < 0)
+  {
+    RCLCPP_FATAL(rclcpp::get_logger("SunriseDdsServoingHardware"), "dds_create_waitset: %s", dds_strretcode(-waitset_));
+    return CallbackReturn::ERROR;
+  }
+
+  dds_return_t ret = dds_waitset_attach(waitset_, read_condition_, 0);
+  if (ret != DDS_RETCODE_OK)
+  {
+    RCLCPP_FATAL(rclcpp::get_logger("SunriseDdsServoingHardware"), "dds_waitset_attach: %s", dds_strretcode(-ret));
+    return CallbackReturn::ERROR;
+  }
+
+  samples_[0] = sunrisedds_interfaces_msg_JointPosition__alloc();
 
   return CallbackReturn::SUCCESS;
 }
@@ -156,46 +178,83 @@ CallbackReturn SunriseDdsServoingHardware::on_activate(const rclcpp_lifecycle::S
 {
   (void)previous_state;
 
+  dds_return_t ret;
+
+  ret = dds_waitset_wait(waitset_, nullptr, 0, DDS_SECS(60));
+  if (ret < 0)
+  {
+    return CallbackReturn::ERROR;
+  }
+
+  if (ret == 0)
+  {
+    return CallbackReturn::FAILURE;
+  }
+
+  if (this->read() != hardware_interface::return_type::OK)
+  {
+    return CallbackReturn::ERROR;
+  }
+
+  for (uint i = 0; i < hw_states_.size(); i++)
+  {
+    hw_commands_[i] = hw_states_[i];
+  }
+
   return CallbackReturn::SUCCESS;
 }
 
 CallbackReturn SunriseDdsServoingHardware::on_deactivate(const rclcpp_lifecycle::State& previous_state)
 {
   (void)previous_state;
+  // dds_waitset_set_trigger(waitset_, true); //
+
+  RCLCPP_INFO(rclcpp::get_logger("SunriseDdsServoingHardware"), "Deactivating");
   return CallbackReturn::SUCCESS;
 }
 
 hardware_interface::return_type SunriseDdsServoingHardware::read()
 {
+  dds_return_t ret;
+
   assert(hw_states_.size() == 7);
 
-  void* samples[1];
-  dds_sample_info_t infos[1];
-
-  samples[0] = sunrisedds_interfaces_msg_JointPosition__alloc();
-
-  dds_return_t ret = dds_take(reader_, samples, infos, 1, 1);
+  ret = dds_waitset_wait(waitset_, nullptr, 0, DDS_SECS(1));
   if (ret < 0)
   {
-    RCLCPP_FATAL(rclcpp::get_logger("SunriseDdsServoingHardware"), "dds_take: %s", dds_strretcode(-ret));
+    RCLCPP_FATAL(rclcpp::get_logger("SunriseDdsServoingHardware"), "dds_waitset_wait: %s", dds_strretcode(-ret));
     return hardware_interface::return_type::ERROR;
   }
-
-  if ((ret > 0) && (infos[0].valid_data))
+  else if (ret == 0)
   {
-    sunrisedds_interfaces_msg_JointPosition* msg =
-        reinterpret_cast<sunrisedds_interfaces_msg_JointPosition*>(samples[0]);
-
-    hw_states_[0] = msg->position.a1;
-    hw_states_[1] = msg->position.a2;
-    hw_states_[2] = msg->position.a3;
-    hw_states_[3] = msg->position.a4;
-    hw_states_[4] = msg->position.a5;
-    hw_states_[5] = msg->position.a6;
-    hw_states_[6] = msg->position.a7;
+    RCLCPP_FATAL(rclcpp::get_logger("SunriseDdsServoingHardware"), "dds_waitset_wait: Timeout");
+    return hardware_interface::return_type::ERROR;
   }
+  else
+  {
+    ret = dds_take(reader_, samples_, infos_, MAX_SAMPLES, MAX_SAMPLES);
+    if (ret < 0)
+    {
+      RCLCPP_FATAL(rclcpp::get_logger("SunriseDdsServoingHardware"), "dds_take: %s", dds_strretcode(-ret));
+      return hardware_interface::return_type::ERROR;
+    }
 
-  return hardware_interface::return_type::OK;
+    if ((ret > 0) && (infos_[0].valid_data))
+    {
+      sunrisedds_interfaces_msg_JointPosition* msg =
+          reinterpret_cast<sunrisedds_interfaces_msg_JointPosition*>(samples_[0]);
+
+      hw_states_[0] = msg->position.a1;
+      hw_states_[1] = msg->position.a2;
+      hw_states_[2] = msg->position.a3;
+      hw_states_[3] = msg->position.a4;
+      hw_states_[4] = msg->position.a5;
+      hw_states_[5] = msg->position.a6;
+      hw_states_[6] = msg->position.a7;
+    }
+
+    return hardware_interface::return_type::OK;
+  }
 }
 
 hardware_interface::return_type SunriseDdsServoingHardware::write()
@@ -223,6 +282,8 @@ hardware_interface::return_type SunriseDdsServoingHardware::write()
 
 SunriseDdsServoingHardware::~SunriseDdsServoingHardware()
 {
+  sunrisedds_interfaces_msg_JointPosition_free(samples_[0], DDS_FREE_ALL);
+
   dds_return_t ret = dds_delete(participant_);
   if (ret != DDS_RETCODE_OK)
   {
