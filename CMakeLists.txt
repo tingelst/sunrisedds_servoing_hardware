@@ -29,8 +29,7 @@ target_link_libraries(sunrisedds_servoing_hardware CycloneDDS::ddsc)
 ament_target_dependencies(sunrisedds_servoing_hardware
                           hardware_interface
                           pluginlib
-                          rclcpp
-                          angles)
+                          rclcpp)
 
 # Causes the visibility macros to use dllexport rather than dllimport, which is
 # appropriate when building the dll but not consuming it.

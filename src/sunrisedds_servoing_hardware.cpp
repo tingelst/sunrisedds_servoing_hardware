@@ -233,5 +233,4 @@ SunriseDdsServoingHardware::~SunriseDdsServoingHardware()
 }  // namespace sunrisedds_servoing_hardware
 
 #include "pluginlib/class_list_macros.hpp"
-
 PLUGINLIB_EXPORT_CLASS(sunrisedds_servoing_hardware::SunriseDdsServoingHardware, hardware_interface::SystemInterface)
